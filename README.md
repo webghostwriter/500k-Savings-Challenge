@@ -14,7 +14,8 @@ A mobile-first Progressive Web App (PWA) that helps you save ₦500,000 by a tar
 - 📈 Projected finish date based on your actual saving pace
 - 🎉 Milestone celebrations (confetti) at 25%, 50%, 75%, and 100%
 - ✏️ Log a custom amount or edit/undo a mistaken entry
-- 🧮 Built-in goal calculator — enter any target amount and date, get the required daily/weekly/monthly savings
+- 🧮 Built-in goal calculator — enter a target and date to get the daily/weekly/monthly amount, or enter a target and what you can save per day to get how many days it'll take, then add it as your goal
+- 🔄 Reset progress (keep the goal) or reset everything to start over
 - 🔔 In-app reminder notifications that stop automatically once you've saved for the day
 - 🌗 Dark mode
 - 💾 Export/import your data as a backup file

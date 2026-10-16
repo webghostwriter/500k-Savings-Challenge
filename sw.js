@@ -1,4 +1,4 @@
-const CACHE_NAME = '500k-challenge-v6';
+const CACHE_NAME = '500k-challenge-v7';
 const ASSETS = [
   './',
   './index.html',

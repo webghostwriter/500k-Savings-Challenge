@@ -11,7 +11,7 @@
 <style>
   :root {
     --green: #16a34a;
-    --green-dark: #059669;
+    --green-dark: #15803d;
     --green-light: #dcfce7;
     --bg: #f8faf9;
     --card: #ffffff;
@@ -196,6 +196,9 @@
 
   input[type="file"] { display: none; }
 
+  .btn-danger { background: #fee2e2; color: #b91c1c; }
+  body.dark .btn-danger { background: #3b1818; color: #fca5a5; }
+
   .reminder-chip {
     display: inline-flex; align-items: center; gap: 8px;
     background: var(--green-light); color: var(--green-dark);
@@ -286,13 +289,21 @@
 
   <div class="card">
     <div class="card-title">Goal Calculator</div>
+    <div class="mode-toggle" style="margin-bottom:14px;">
+      <button class="mode-btn active" id="calcModeDate">By date</button>
+      <button class="mode-btn" id="calcModeDaily">By daily amount</button>
+    </div>
     <div class="field">
       <label>Target amount (₦)</label>
       <input type="number" id="calcGoal" placeholder="500000">
     </div>
-    <div class="field">
+    <div class="field" id="calcDateField">
       <label>Target date</label>
       <input type="date" id="calcDate">
+    </div>
+    <div class="field" id="calcDailyField" style="display:none;">
+      <label>How much can you actually save per day? (₦)</label>
+      <input type="number" id="calcDailyAmount" placeholder="e.g. 5000">
     </div>
     <button class="btn-secondary" id="calcBtn">Calculate</button>
     <div class="calc-result" id="calcResult" style="display:none;"></div>
@@ -339,6 +350,15 @@
     </div>
     <input type="file" id="importFile" accept="application/json">
     <div class="hint">Export saves your data as a file. Keep it somewhere safe — reinstalling or clearing browser data will erase your progress unless you have a backup.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Reset</div>
+    <div class="btn-row">
+      <button class="btn-secondary btn-danger" id="resetProgressBtn">Reset progress</button>
+      <button class="btn-secondary btn-danger" id="resetAllBtn">Reset everything</button>
+    </div>
+    <div class="hint"><b>Reset progress</b> clears all your saved entries and milestones but keeps your current goal, so you can start it over. <b>Reset everything</b> also puts the goal back to the original ₦500,000 by 31 Dec 2026. Resets can't be undone, so tap Export Backup above first if you want a copy.</div>
   </div>
 </div>
 
@@ -791,46 +811,94 @@
   });
 
   // Goal calculator
+  let calcMode = 'date';
+
+  function setCalcMode(m) {
+    calcMode = m;
+    document.getElementById('calcModeDate').classList.toggle('active', m === 'date');
+    document.getElementById('calcModeDaily').classList.toggle('active', m === 'daily');
+    document.getElementById('calcDateField').style.display = m === 'date' ? 'block' : 'none';
+    document.getElementById('calcDailyField').style.display = m === 'daily' ? 'block' : 'none';
+    document.getElementById('calcResult').style.display = 'none';
+  }
+  document.getElementById('calcModeDate').addEventListener('click', () => setCalcMode('date'));
+  document.getElementById('calcModeDaily').addEventListener('click', () => setCalcMode('daily'));
+
+  function fmtDate(d) {
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
   document.getElementById('calcBtn').addEventListener('click', () => {
     const goal = parseFloat(document.getElementById('calcGoal').value);
-    const dateStr = document.getElementById('calcDate').value;
-    if (!goal || goal <= 0 || !dateStr) { showToast('Enter a goal amount and date'); return; }
-    const targetDate = new Date(dateStr);
-    const today = new Date();
-    const msLeft = targetDate - today;
-    if (msLeft <= 0) { showToast('Pick a future date'); return; }
+    if (!goal || goal <= 0) { showToast('Enter a target amount'); return; }
 
     const entries = getEntries();
     const currentTotal = entries.reduce((sum, e) => sum + e.amount, 0);
     const remaining = Math.max(0, goal - currentTotal);
-
-    const daysLeft = Math.max(1, Math.ceil(msLeft / 86400000));
-    const weeksLeft = Math.max(1, daysLeft / 7);
-    const monthsLeft = Math.max(1, daysLeft / 30.44);
-
-    const dailyNeeded = remaining / daysLeft;
-    const weeklyNeeded = remaining / weeksLeft;
-    const monthlyNeeded = remaining / monthsLeft;
-
     const resultBox = document.getElementById('calcResult');
-    resultBox.style.display = 'block';
-    resultBox.innerHTML = `
-      <div class="remaining">You'd need ${formatMoney(remaining)} more (already saved ${formatMoney(currentTotal)})</div>
-      <div class="row"><span>Daily</span><b>${formatMoney(dailyNeeded)}</b></div>
-      <div class="row"><span>Weekly</span><b>${formatMoney(weeklyNeeded)}</b></div>
-      <div class="row"><span>Monthly</span><b>${formatMoney(monthlyNeeded)}</b></div>
-      <button class="btn-secondary" id="applyCalcBtn" style="margin-top:10px;">Apply as my goal</button>
-    `;
-    document.getElementById('applyCalcBtn').addEventListener('click', () => {
-      const s = getSettings();
-      s.target = goal;
-      s.endDate = dateStr;
-      s.dailyAmount = Math.ceil(dailyNeeded);
-      saveSettings(s);
-      loadSettingsForm();
-      render();
-      showToast('New goal applied 🎯');
-    });
+
+    if (calcMode === 'date') {
+      const dateStr = document.getElementById('calcDate').value;
+      if (!dateStr) { showToast('Pick a target date'); return; }
+      const msLeft = new Date(dateStr) - new Date();
+      if (msLeft <= 0) { showToast('Pick a future date'); return; }
+
+      const daysLeft = Math.max(1, Math.ceil(msLeft / 86400000));
+      const dailyNeeded = remaining / daysLeft;
+      const weeklyNeeded = remaining / Math.max(1, daysLeft / 7);
+      const monthlyNeeded = remaining / Math.max(1, daysLeft / 30.44);
+
+      resultBox.style.display = 'block';
+      resultBox.innerHTML = `
+        <div class="remaining">You'd need ${formatMoney(remaining)} more (already saved ${formatMoney(currentTotal)})</div>
+        <div class="row"><span>Daily</span><b>${formatMoney(dailyNeeded)}</b></div>
+        <div class="row"><span>Weekly</span><b>${formatMoney(weeklyNeeded)}</b></div>
+        <div class="row"><span>Monthly</span><b>${formatMoney(monthlyNeeded)}</b></div>
+        <button class="btn-secondary" id="applyCalcBtn" style="margin-top:10px;">Add as my goal</button>
+      `;
+      document.getElementById('applyCalcBtn').addEventListener('click', () => {
+        const s = getSettings();
+        s.target = goal;
+        s.endDate = dateStr;
+        s.dailyAmount = Math.max(1, Math.ceil(dailyNeeded));
+        saveSettings(s);
+        loadSettingsForm();
+        render();
+        showToast('New goal applied 🎯');
+      });
+    } else {
+      const perDay = parseFloat(document.getElementById('calcDailyAmount').value);
+      if (!perDay || perDay <= 0) { showToast('Enter how much you can save per day'); return; }
+      if (remaining === 0) {
+        resultBox.style.display = 'block';
+        resultBox.innerHTML = `<div class="remaining">You've already saved ${formatMoney(currentTotal)} — this target is already reached! 🎉</div>`;
+        return;
+      }
+
+      const daysNeeded = Math.ceil(remaining / perDay);
+      const finish = new Date();
+      finish.setDate(finish.getDate() + daysNeeded);
+      const finishStr = todayStr(finish);
+
+      resultBox.style.display = 'block';
+      resultBox.innerHTML = `
+        <div class="remaining">You'd need ${formatMoney(remaining)} more (already saved ${formatMoney(currentTotal)})</div>
+        <div class="row"><span>Days needed</span><b>${daysNeeded.toLocaleString('en-NG')} days</b></div>
+        <div class="row"><span>That's about</span><b>${(daysNeeded / 7).toFixed(1)} weeks / ${(daysNeeded / 30.44).toFixed(1)} months</b></div>
+        <div class="row"><span>Finish date</span><b>${fmtDate(finish)}</b></div>
+        <button class="btn-secondary" id="applyCalcBtn" style="margin-top:10px;">Add as my goal</button>
+      `;
+      document.getElementById('applyCalcBtn').addEventListener('click', () => {
+        const s = getSettings();
+        s.target = goal;
+        s.endDate = finishStr;
+        s.dailyAmount = perDay;
+        saveSettings(s);
+        loadSettingsForm();
+        render();
+        showToast('New goal applied 🎯');
+      });
+    }
   });
 
   // Backup / Export / Import
@@ -876,6 +944,41 @@
     };
     reader.readAsText(file);
     e.target.value = '';
+  });
+
+  // Reset
+  function clearProgress() {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(MILESTONE_KEY);
+    localStorage.removeItem(NOTIFIED_KEY);
+    calMonthOffset = 0;
+    document.getElementById('editAmountForm').style.display = 'none';
+    document.getElementById('calcResult').style.display = 'none';
+  }
+
+  document.getElementById('resetProgressBtn').addEventListener('click', () => {
+    const entries = getEntries();
+    if (!entries.length) { showToast('Nothing to reset yet'); return; }
+    const total = entries.reduce((sum, e) => sum + e.amount, 0);
+    const ok = confirm(`Reset progress?\n\nThis deletes all ${entries.length} saved entries (${formatMoney(total)}) but keeps your current goal. It can't be undone.\n\nTip: tap Export Backup first if you want a copy.`);
+    if (!ok) return;
+    clearProgress();
+    render();
+    showToast('Progress reset — fresh start 🌱');
+  });
+
+  document.getElementById('resetAllBtn').addEventListener('click', () => {
+    const ok = confirm(`Reset everything?\n\nThis deletes all saved entries and sets your goal back to ${formatMoney(DEFAULT_SETTINGS.target)} by ${fmtDate(new Date(DEFAULT_SETTINGS.endDate))}. It can't be undone.\n\nTip: tap Export Backup first if you want a copy.`);
+    if (!ok) return;
+    clearProgress();
+    const s = getSettings();
+    s.target = DEFAULT_SETTINGS.target;
+    s.endDate = DEFAULT_SETTINGS.endDate;
+    s.dailyAmount = DEFAULT_SETTINGS.dailyAmount;
+    saveSettings(s);
+    loadSettingsForm();
+    render();
+    showToast('Everything reset 🌱');
   });
 
   // Init
